@@ -612,7 +612,7 @@ def from_EN_to_GNN(E, N, targets, aggregation_type, sparse_matrix=True):
     n = N_full.shape[0]
     d_l = N.shape[1]
     is_multilabel = False
-    n_classes = (np.max(targets).astype(np.int) + 1)
+    n_classes = (np.max(targets).astype(int) + 1)
     node_labels = torch.FloatTensor(N)
     targets = torch.tensor(targets, dtype=torch.long)
     return Dataset(
@@ -641,7 +641,7 @@ def old_load_karate(path="data/karate/"):
     # edge_inv = np.flip(edges, axis=1) # add also archs in opposite direction
     # edges = np.concatenate((edges, edge_inv))
     edges = edges[np.lexsort((edges[:, 1], edges[:, 0]))]  # reorder list of edges also by second column
-    features = sp.eye(np.max(edges + 1), dtype=np.float).tocsr()
+    features = sp.eye(np.max(edges + 1), dtype=float).tocsr()
 
     idx_labels = np.loadtxt("{}classes.txt".format(path), dtype=np.float32)
     idx_labels = idx_labels[idx_labels[:, 0].argsort()]
