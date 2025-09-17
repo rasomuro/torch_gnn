@@ -156,8 +156,8 @@ class GNNWrapper:
             #     (torch.argmax(output[data.idx_test], dim=-1) == data.targets[data.idx_test]).float())
 
             if epoch % self.config.log_interval == 0:
-                print('Test set: Average loss: {:.4f}, Accuracy:  ({:.4f}%) , Best Accuracy:  ({:.4f}%)'.format(
-                    test_loss, acc_test, self.TestAccuracy.get_best()))
+                print('Test set: Average loss: {:.4f}, Accuracy:  ({:.2f}%) , Best Accuracy:  ({:.2f}%)'.format(
+                    test_loss, 100*acc_test, 100*self.TestAccuracy.get_best()))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Test Accuracy',
@@ -188,8 +188,8 @@ class GNNWrapper:
             #     (torch.argmax(output[data.idx_test], dim=-1) == data.targets[data.idx_test]).float())
 
             if epoch % self.config.log_interval == 0:
-                print('Valid set: Average loss: {:.4f}, Accuracy:  ({:.4f}%) , Best Accuracy:  ({:.4f}%)'.format(
-                    test_loss, acc_valid, self.ValidAccuracy.get_best()))
+                print('Valid set: Average loss: {:.4f}, Accuracy:  ({:.2f}%) , Best Accuracy:  ({:.2f}%)'.format(
+                    test_loss, 100*acc_valid, 100*self.ValidAccuracy.get_best()))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Valid Accuracy',
@@ -316,8 +316,8 @@ class SemiSupGNNWrapper(GNNWrapper):
             #     (torch.argmax(output[data.idx_test], dim=-1) == data.targets[data.idx_test]).float())
 
             if epoch % self.config.log_interval == 0:
-                print('Test set: Average loss: {:.4f}, Accuracy:  ({:.4f}%) , Best Accuracy:  ({:.4f}%)'.format(
-                    test_loss, acc_test, self.TestAccuracy.get_best()))
+                print('Test set: Average loss: {:.4f}, Accuracy:  ({:.2f}%) , Best Accuracy:  ({:.2f}%)'.format(
+                    test_loss, 100*acc_test, 100*self.TestAccuracy.get_best()))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Test Accuracy',
@@ -348,8 +348,8 @@ class SemiSupGNNWrapper(GNNWrapper):
             #     (torch.argmax(output[data.idx_test], dim=-1) == data.targets[data.idx_test]).float())
 
             if epoch % self.config.log_interval == 0:
-                print('Valid set: Average loss: {:.4f}, Accuracy:  ({:.4f}%) , Best Accuracy:  ({:.4f}%)'.format(
-                    test_loss, acc_valid, self.ValidAccuracy.get_best()))
+                print('Valid set: Average loss: {:.4f}, Accuracy:  ({:.2f}%) , Best Accuracy:  ({:.2f}%)'.format(
+                    test_loss, 100*acc_valid, 100*self.ValidAccuracy.get_best()))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Valid Accuracy',

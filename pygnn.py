@@ -16,12 +16,16 @@ class GNN(nn.Module):
         # hyperparameters and general properties
         self.convergence_threshold = config.convergence_threshold
         self.max_iterations = config.max_iterations
+        self.n_nodes = config.n_nodes
         self.state_dim = config.state_dim
         self.label_dim = config.label_dim
         self.output_dim = config.output_dim
         self.state_transition_hidden_dims = config.state_transition_hidden_dims
         self.output_function_hidden_dims = config.output_function_hidden_dims
 
+        # node state initialization
+        self.node_state = None
+        # self.converged_states = torch.zeros(*[self.n_nodes, self.state_dim]).to(self.config.device)
         # state and output transition functions
         if state_net is None:
             self.state_transition_function = StateTransition(self.state_dim, self.label_dim,
@@ -37,6 +41,7 @@ class GNN(nn.Module):
         self.graph_based = self.config.graph_based
 
     def reset_parameters(self):
+
         self.state_transition_function.mlp.init()
         self.output_function.init()
 
@@ -50,7 +55,7 @@ class GNN(nn.Module):
         n_iterations = 0
         # convergence loop
         # state initialization
-        if self.n_nodes != node_labels.shape[0]:
+        if self.n_nodes != node_labels.shape[0] or self.node_state is None:
             self.n_nodes = node_labels.shape[0]
             self.node_state = torch.zeros(*[self.n_nodes, self.state_dim]).to(self.config.device)
         node_states = self.node_state if node_states is None else node_states
@@ -64,11 +69,16 @@ class GNN(nn.Module):
                                       dim=1)  # checked, they are the same (in cuda, some bug)
 
                 check_min = distance < self.convergence_threshold
-            node_states.copy_(new_state)
+            node_states = new_state
 
             if check_min.all():
                 break
 
-        output = self.output_function(torch.matmul(graph_agg, node_states) if self.graph_based else node_states)
+        states = node_states
+        # self.converged_states = states
+        if self.graph_based:
+            states = torch.matmul(graph_agg, node_states)
+
+        output = self.output_function(states)
 
         return output, n_iterations
