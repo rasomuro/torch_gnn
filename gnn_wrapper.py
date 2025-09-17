@@ -56,19 +56,20 @@ class GNNWrapper:
             self.writer = SummaryWriter('logs/tensorboard')
         self.first_flag_writer = True
 
-    def __call__(self, dset, state_net=None, out_net=None):
+    def __call__(self, tr_dset, ts_dset, state_net=None, out_net=None):
         # handle the dataset info
-        self._data_loader(dset)
+        self._data_loader(tr_dset, ts_dset)
         self.gnn = GNN(self.config, state_net, out_net).to(self.config.device)
         self._criterion()
         self._optimizer()
         self._accuracy()
 
-    def _data_loader(self, dset):  # handle dataset data and metadata
-        self.dset = dset.to(self.config.device)
-        self.config.label_dim = self.dset.node_label_dim
-        self.config.n_nodes = self.dset.num_nodes
-        self.config.output_dim = self.dset.num_classes
+    def _data_loader(self, tr_dset, ts_dset):  # handle dataset data and metadata
+        self.tr_dset = tr_dset.to(self.config.device)
+        self.ts_dset = ts_dset.to(self.config.device)
+        self.config.label_dim = self.tr_dset.node_label_dim
+        self.config.n_nodes = self.tr_dset.num_nodes
+        self.config.output_dim = self.tr_dset.num_classes
 
     def _optimizer(self):
         # for name, param in self.gnn.named_parameters():
@@ -88,7 +89,7 @@ class GNNWrapper:
 
     def train_step(self, epoch):
         self.gnn.train()
-        data = self.dset
+        data = self.tr_dset
         self.optimizer.zero_grad()
         self.TrainAccuracy.reset()
         # output computation
@@ -140,7 +141,7 @@ class GNNWrapper:
     def test_step(self, epoch):
         ####  TEST
         self.gnn.eval()
-        data = self.dset
+        data = self.ts_dset
         self.TestAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
@@ -172,7 +173,7 @@ class GNNWrapper:
     def valid_step(self, epoch):
         ####  TEST
         self.gnn.eval()
-        data = self.dset
+        data = self.ts_dset
         self.ValidAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
@@ -235,12 +236,6 @@ class SemiSupGNNWrapper(GNNWrapper):
     def __init__(self, config: Config):
         super().__init__(config)
 
-    def _data_loader(self, dset):  # handle dataset data and metadata
-        self.dset = dset.to(self.config.device)
-        self.config.label_dim = self.dset.node_label_dim
-        self.config.n_nodes = self.dset.num_nodes
-        self.config.output_dim = self.dset.num_classes
-
     def _accuracy(self):
         self.TrainAccuracy = Accuracy(type="semisupervised")
         self.ValidAccuracy = Accuracy(type="semisupervised")
@@ -248,7 +243,7 @@ class SemiSupGNNWrapper(GNNWrapper):
 
     def train_step(self, epoch):
         self.gnn.train()
-        data = self.dset
+        data = self.tr_dset
         self.optimizer.zero_grad()
         self.TrainAccuracy.reset()
         # output computation
@@ -306,7 +301,7 @@ class SemiSupGNNWrapper(GNNWrapper):
     def test_step(self, epoch):
         ####  TEST
         self.gnn.eval()
-        data = self.dset
+        data = self.ts_dset
         self.TestAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
@@ -338,7 +333,7 @@ class SemiSupGNNWrapper(GNNWrapper):
     def valid_step(self, epoch):
         ####  TEST
         self.gnn.eval()
-        data = self.dset
+        data = self.ts_dset
         self.ValidAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
