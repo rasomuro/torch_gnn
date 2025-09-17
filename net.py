@@ -36,10 +36,12 @@ class StateTransition(nn.Module):
                  node_state_dim: int,
                  node_label_dim: int,
                  mlp_hidden_dim: typing.Iterable[int],
-                 activation_function=nn.Tanh()
+                 activation_function=nn.Tanh(),
+                 *,
+                 edge_label_dim=0
                  ):
         super(type(self), self).__init__()
-        d_i = node_state_dim + 2 * node_label_dim  # arc state computation f(l_v, l_n, x_n)
+        d_i = node_state_dim + 2 * node_label_dim + edge_label_dim  # arc state computation f(l_v, l_n, x_n)
         d_o = node_state_dim
         d_h = list(mlp_hidden_dim)  # if already a list, no change
         self.mlp = MLP(input_dim=d_i, hidden_sizes=d_h, out_dim=d_o, activation_function=activation_function,
@@ -51,13 +53,15 @@ class StateTransition(nn.Module):
             node_labels,
             edges,
             agg_matrix,
+            *,
+            edge_labels=None
     ):
         src_label = node_labels[edges[:, 0]]
         tgt_label = node_labels[edges[:, 1]]
         tgt_state = node_states[edges[:, 1]]
         edge_states = self.mlp(
             torch.cat(
-                [src_label, tgt_label, tgt_state],
+                [src_label, tgt_label, tgt_state] if edge_labels is None else [src_label, tgt_label, tgt_state, edge_labels],
                 -1
             )
         )
@@ -73,10 +77,12 @@ class GINTransition(nn.Module):
                  node_state_dim: int,
                  node_label_dim: int,
                  mlp_hidden_dim: typing.Iterable[int],
-                 activation_function=nn.Tanh()
+                 activation_function=nn.Tanh(),
+                 *,
+                 edge_label_dim=0
                  ):
         super(type(self), self).__init__()
-        d_i = node_state_dim + node_label_dim
+        d_i = node_state_dim + node_label_dim + edge_label_dim
         d_o = node_state_dim
         d_h = list(mlp_hidden_dim)
         self.mlp = MLP(input_dim=d_i, hidden_sizes=d_h, out_dim=d_o, activation_function=activation_function,
@@ -88,10 +94,12 @@ class GINTransition(nn.Module):
             node_labels,
             edges,
             agg_matrix,
+            *,
+            edge_labels=None
 
     ):
         state_and_label = torch.cat(
-            [node_states, node_labels],
+            [node_states, node_labels] if edge_labels is None else [node_states, node_labels, edge_labels],
             -1
         )
         aggregated_neighbourhood = torch.matmul(agg_matrix, state_and_label[edges[:, 1]])
@@ -106,10 +114,12 @@ class GINPreTransition(nn.Module):
                  node_state_dim: int,
                  node_label_dim: int,
                  mlp_hidden_dim: typing.Iterable[int],
-                 activation_function=nn.Tanh()
+                 activation_function=nn.Tanh(),
+                 *,
+                 edge_label_dim=0
                  ):
         super(type(self), self).__init__()
-        d_i = node_state_dim +  node_label_dim
+        d_i = node_state_dim +  node_label_dim + edge_label_dim
         d_o = node_state_dim
         d_h = list(mlp_hidden_dim)
         self.mlp = MLP(input_dim=d_i, hidden_sizes=d_h, out_dim=d_o, activation_function=activation_function,
@@ -121,10 +131,12 @@ class GINPreTransition(nn.Module):
             node_labels,
             edges,
             agg_matrix,
+            *,
+            edge_labels=None
     ):
         intermediate_states = self.mlp(
             torch.cat(
-                [node_states, node_labels],
+                [node_states, node_labels] if edge_labels is None else [node_states, node_labels, edge_labels],
                 -1
             )
         )

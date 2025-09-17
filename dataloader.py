@@ -115,7 +115,10 @@ class Dataset:
             idx_train=None,
             idx_valid=None,
             idx_test=None,
-            graph_node=None
+            graph_node=None,
+            *,
+            edge_label_dim=0,
+            edge_labels=None
     ):
         self.name = name
         self.num_nodes = num_nodes
@@ -131,12 +134,14 @@ class Dataset:
         self.idx_valid = idx_valid
         self.idx_test = idx_test
         self.graph_node = graph_node
+        self.edge_labels = edge_labels
+        self.edge_label_dim = edge_label_dim
 
     def cuda(self):
-        self.edges, self.agg_matrix, self.node_labels, self.targets, self.idx_train, self.idx_test, self.graph_node = map(
+        self.edges, self.agg_matrix, self.node_labels, self.targets, self.idx_train, self.idx_test, self.graph_node, self.edge_labels = map(
             lambda x: x.cuda() if x is not None else None,
             [self.edges, self.agg_matrix, self.node_labels, self.targets, self.idx_train, self.idx_test,
-             self.graph_node]
+             self.graph_node, self.edge_labels]
         )
         return self
 
@@ -555,7 +560,7 @@ def get_dgl_karate(aggregation_type="sum"):
     )
 
 
-def from_EN_to_GNN(E, N, targets, aggregation_type, sparse_matrix=True):
+def from_EN_to_GNN(E, N, targets, aggregation_type, sparse_matrix=True, *, edge_labels=None):
     """
     :param E: # E matrix - matrix of edges : [[id_p, id_c, graph_id],...]
     :param N: # N matrix - [node_features, graph_id (to which the node belongs)]
@@ -564,8 +569,10 @@ def from_EN_to_GNN(E, N, targets, aggregation_type, sparse_matrix=True):
 
     N_full = N
     E_full = E
+    edge_labels_full = edge_labels
     N = N[:, :-1]  # avoid graph_id
     e = E[:, :2]  # take only first tow columns => id_p, id_c
+    edge_labels = edge_labels[:, :-1] if edge_labels is not None else None
 
     # creating input for gnn => [id_p, id_c, label_p, label_c]
 
@@ -611,9 +618,11 @@ def from_EN_to_GNN(E, N, targets, aggregation_type, sparse_matrix=True):
     e = E_full.shape[0]
     n = N_full.shape[0]
     d_l = N.shape[1]
+    d_edge_labels = edge_labels.shape[1] if edge_labels is not None else 0
     is_multilabel = False
     n_classes = (np.max(targets).astype(int) + 1)
     node_labels = torch.FloatTensor(N)
+    torch_edge_labels = torch.FloatTensor(edge_labels) if edge_labels is not None else None
     targets = torch.tensor(targets, dtype=torch.long)
     return Dataset(
         "name",
@@ -626,7 +635,9 @@ def from_EN_to_GNN(E, N, targets, aggregation_type, sparse_matrix=True):
         agg_matrix,
         node_labels,
         targets,
-        graph_node=graphnode
+        graph_node=graphnode,
+        edge_label_dim=d_edge_labels,
+        edge_labels=torch_edge_labels
     )
 
 

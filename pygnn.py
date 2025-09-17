@@ -19,6 +19,7 @@ class GNN(nn.Module):
         self.n_nodes = config.n_nodes
         self.state_dim = config.state_dim
         self.label_dim = config.label_dim
+        self.edge_label_dim = config.edge_label_dim
         self.output_dim = config.output_dim
         self.state_transition_hidden_dims = config.state_transition_hidden_dims
         self.output_function_hidden_dims = config.output_function_hidden_dims
@@ -30,7 +31,8 @@ class GNN(nn.Module):
         if state_net is None:
             self.state_transition_function = StateTransition(self.state_dim, self.label_dim,
                                                              mlp_hidden_dim=self.state_transition_hidden_dims,
-                                                             activation_function=config.activation)
+                                                             activation_function=config.activation,
+                                                             edge_label_dim=self.edge_label_dim)
         else:
             self.state_transition_function = state_net
         if out_net is None:
@@ -50,7 +52,9 @@ class GNN(nn.Module):
                 agg_matrix,
                 node_labels,
                 node_states=None,
-                graph_agg=None
+                graph_agg=None,
+                *,
+                edge_labels=None
                 ):
         n_iterations = 0
         # convergence loop
@@ -61,7 +65,7 @@ class GNN(nn.Module):
         node_states = self.node_state if node_states is None else node_states
 
         while n_iterations < self.max_iterations:
-            new_state = self.state_transition_function(node_states, node_labels, edges, agg_matrix)
+            new_state = self.state_transition_function(node_states, node_labels, edges, agg_matrix, edge_labels=edge_labels)
             n_iterations += 1
             # convergence condition
             with torch.no_grad():

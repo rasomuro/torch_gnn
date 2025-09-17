@@ -31,6 +31,7 @@ class GNNWrapper:
             self.n_nodes = None
             self.state_dim = None
             self.label_dim = None
+            self.edge_label_dim = None
             self.output_dim = None
             self.graph_based = False
             self.activation = torch.nn.Tanh()
@@ -68,6 +69,7 @@ class GNNWrapper:
         self.tr_dset = tr_dset.to(self.config.device)
         self.ts_dset = ts_dset.to(self.config.device)
         self.config.label_dim = self.tr_dset.node_label_dim
+        self.config.edge_label_dim = self.tr_dset.edge_label_dim
         self.config.n_nodes = self.tr_dset.num_nodes
         self.config.output_dim = self.tr_dset.num_classes
 
@@ -94,9 +96,9 @@ class GNNWrapper:
         self.TrainAccuracy.reset()
         # output computation
         if self.config.graph_based:
-            output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node)
+            output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node, edge_labels=data.edge_labels)
         else:
-            output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels)
+            output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
         # loss computation - semisupervised
         loss = self.criterion(output, data.targets)
 
@@ -132,11 +134,11 @@ class GNNWrapper:
                         self.writer.add_histogram(name, param, epoch)
         # self.TrainAccuracy.reset()
 
-    def predict(self, edges, agg_matrix, node_labels):
-        return self.gnn(edges, agg_matrix, node_labels)
+    def predict(self, edges, agg_matrix, node_labels, *, edge_labels=None):
+        return self.gnn(edges, agg_matrix, node_labels, edge_labels=edge_labels)
 
-    def predict(self, edges, agg_matrix, node_labels, graph_node):
-        return self.gnn(edges, agg_matrix, node_labels, graph_agg=graph_node)
+    def predict(self, edges, agg_matrix, node_labels, graph_node, *, edge_labels=None):
+        return self.gnn(edges, agg_matrix, node_labels, graph_agg=graph_node, edge_labels=edge_labels)
 
     def test_step(self, epoch):
         ####  TEST
@@ -145,9 +147,9 @@ class GNNWrapper:
         self.TestAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
-                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node)
+                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node, edge_labels=data.edge_labels)
             else:
-                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels)
+                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
             test_loss = self.criterion(output, data.targets)
 
             self.TestAccuracy.update(output, data.targets)
@@ -177,9 +179,9 @@ class GNNWrapper:
         self.ValidAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
-                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node)
+                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node, edge_labels=data.edge_labels)
             else:
-                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels)
+                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
             test_loss = self.criterion(output, data.targets)
 
             self.ValidAccuracy.update(output, data.targets)
@@ -248,9 +250,9 @@ class SemiSupGNNWrapper(GNNWrapper):
         self.TrainAccuracy.reset()
         # output computation
         if self.config.graph_based:
-            output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node)
+            output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node, edge_labels=data.edge_labels)
         else:
-            output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels)
+            output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
         # loss computation - semisupervised
         loss = self.criterion(output[data.idx_train], data.targets[data.idx_train])
 
@@ -295,8 +297,8 @@ class SemiSupGNNWrapper(GNNWrapper):
         # self.TrainAccuracy.reset()
         return output  # used for plotting
 
-    def predict(self, edges, agg_matrix, node_labels):
-        return self.gnn(edges, agg_matrix, node_labels)
+    def predict(self, edges, agg_matrix, node_labels, *, edge_labels=None):
+        return self.gnn(edges, agg_matrix, node_labels, edge_labels=edge_labels)
 
     def test_step(self, epoch):
         ####  TEST
@@ -305,9 +307,9 @@ class SemiSupGNNWrapper(GNNWrapper):
         self.TestAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
-                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node)
+                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node, edge_labels=data.edge_labels)
             else:
-                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels)
+                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
             test_loss = self.criterion(output[data.idx_test], data.targets[data.idx_test])
 
             self.TestAccuracy.update(output, data.targets, idx=data.idx_test)
@@ -337,9 +339,9 @@ class SemiSupGNNWrapper(GNNWrapper):
         self.ValidAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
-                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node)
+                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node, edge_labels=data.edge_labels)
             else:
-                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels)
+                output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
             test_loss = self.criterion(output[data.idx_valid], data.targets[data.idx_valid])
 
             self.ValidAccuracy.update(output, data.targets, idx=data.idx_valid)
