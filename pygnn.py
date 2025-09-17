@@ -50,8 +50,10 @@ class GNN(nn.Module):
         n_iterations = 0
         # convergence loop
         # state initialization
-        if node_states is None:
-            node_states = torch.zeros(*[node_labels.shape[0], self.state_dim]).to(self.config.device)  # (n,d_n)
+        if self.n_nodes != node_labels.shape[0]:
+            self.n_nodes = node_labels.shape[0]
+            self.node_state = torch.zeros(*[self.n_nodes, self.state_dim]).to(self.config.device)
+        node_states = self.node_state if node_states is None else node_states
 
         while n_iterations < self.max_iterations:
             new_state = self.state_transition_function(node_states, node_labels, edges, agg_matrix)
