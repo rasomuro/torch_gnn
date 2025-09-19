@@ -61,7 +61,7 @@ class GNN(nn.Module):
         # state initialization
         if self.n_nodes != node_labels.shape[0] or self.node_state is None:
             self.n_nodes = node_labels.shape[0]
-            self.node_state = torch.ones(*[self.n_nodes, self.state_dim]).to(self.config.device)
+            self.node_state = torch.rand(*[self.n_nodes, self.state_dim]).to(self.config.device)
         node_states = self.node_state if node_states is None else node_states
 
         while n_iterations < self.max_iterations:
