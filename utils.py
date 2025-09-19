@@ -38,7 +38,7 @@ class Metric:
         pass
 
     @abstractmethod
-    def update(self, output, target):
+    def update(self, output, target, batch_compute=False, idx=None) -> float|None:
         """
         Updates the metric's state using the passed batch output.
 
@@ -51,7 +51,7 @@ class Metric:
         pass
 
     @abstractmethod
-    def compute(self):
+    def compute(self) -> float:
         """
         Computes the metric based on it's accumulated state.
 
@@ -83,9 +83,10 @@ class Accuracy(Metric):
         self._num_examples = 0
         super(Accuracy, self).reset()
 
-    def update(self, output, target, batch_compute=False, idx=None):
+    def update(self, output, target, batch_compute=False, idx=None) -> float|None:
         y_pred = output
-
+        correct = None
+        batch_accuracy = 0.0
         if self._type == "binary":
             correct = torch.eq(y_pred.view(-1).to(target), target.view(-1))
         elif self._type == "multiclass":
@@ -110,6 +111,7 @@ class Accuracy(Metric):
 
         # elif self._type == "semisupervised":
         #     output[data.idx_test], data.targets[data.idx_test]
+        assert type(self._num_correct) == int and type(self._num_examples) == int and type(correct)==torch.Tensor
         self._num_correct += torch.sum(correct).item()
         self._num_examples += correct.shape[0]
 
@@ -122,6 +124,7 @@ class Accuracy(Metric):
     def compute(self):
         if self._num_examples == 0:
             raise Exception('Accuracy must have at least one example before it can be computed.')
+        assert (type(self._num_correct)==int or type(self._num_correct)==float) and type(self._num_examples)==int
         acc = self._num_correct / self._num_examples
         if acc > self.best_accuracy:
             self.best_accuracy = acc
@@ -150,25 +153,20 @@ def __weights_visualizer(self, layer, name, epoch):
 
 def get_G_function(descr, eps):
     GF = descr
-    if GF == "lin":
-        def G(x):
-            return x
-    elif GF == "abs":
-        def G(x):
-            return torch.abs(x)
+    G = lambda x: x
+    # if GF == "lin":
+    #     def G(x):
+    #         return x
+    if GF == "abs":
+        G = lambda x: torch.abs(x)
     elif GF == "eps":
-        def G(x):
-            return F.relu(torch.abs(x) - eps)
+        G = lambda x: F.relu(torch.abs(x) - eps)
     elif GF == "lineps":
-        def G(x):
-            return F.relu(x - eps) - F.relu(- x - eps)
+        G = lambda x: F.relu(x - eps) - F.relu(- x - eps)
     elif GF == "squared":
-        def G(x):
-            return torch.pow(x, 2)
+        G = lambda x: torch.pow(x, 2)
     elif GF == "^3":
-        def G(x):
-            return torch.pow(x, 3)
-    else:
-        def G(x):
-            return x
+        G = lambda x: torch.pow(x, 3)
+    # else:
+    #     G = lambda x: x
     return G

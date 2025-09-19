@@ -52,7 +52,7 @@ class GNN(nn.Module):
                 agg_matrix,
                 node_labels,
                 node_states=None,
-                graph_agg=None,
+                graph_agg: torch.Tensor|None=None,
                 *,
                 edge_labels=None
                 ):
@@ -81,6 +81,7 @@ class GNN(nn.Module):
         states = node_states
         # self.converged_states = states
         if self.graph_based:
+            assert graph_agg is not None
             states = torch.matmul(graph_agg, node_states)
 
         output = self.output_function(states)

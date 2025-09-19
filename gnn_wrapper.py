@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import dataloader
+from dataloader import Dataset
 import torch.optim as optim
 from abc import ABCMeta, abstractmethod
 from utils import Accuracy
@@ -11,45 +11,56 @@ from utils import matplotlib_imshow
 import utils
 from pygnn import GNN
 
+from typing import Optional, Literal
+
 
 class GNNWrapper:
     class Config:
+        device: Optional[torch.device]
+        use_cuda: bool
+        dataset_path: Optional[str]
+        log_interval: int
+        tensorboard: bool
+        task_type: Literal['binary','multiclass','semisupervised','multilabel']
+        lrw: float
+        epochs: int
+        convergence_threshold: float
+        max_iterations: int
+        n_nodes: int
+        state_dim: int
+        label_dim: int
+        edge_label_dim: int
+        output_dim: int
+        graph_based: bool
+        activation: nn.Module
+        state_transition_hidden_dims: list[int]
+        output_function_hidden_dims: list[int]
+
         def __init__(self):
             self.device = None
-            self.use_cuda = None
+            self.use_cuda = False
             self.dataset_path = None
-            self.log_interval = None
-            self.tensorboard = None
-            self.task_type = None
+            self.log_interval = 10
+            self.tensorboard = False
 
             # hyperparams
-            self.lrw = None
-            self.loss_f = None
-            self.epochs = None
-            self.convergence_threshold = None
-            self.max_iterations = None
-            self.n_nodes = None
-            self.state_dim = None
-            self.label_dim = None
-            self.edge_label_dim = None
-            self.output_dim = None
+            self.lrw = .05
+            self.epochs = 50
+            self.convergence_threshold = .01
+            self.max_iterations = 50
             self.graph_based = False
             self.activation = torch.nn.Tanh()
-            self.state_transition_hidden_dims = None
-            self.output_function_hidden_dims = None
-            self.task_type = "semisupervised"
+            self.task_type = "multilabel"
 
-            # optional
-            # self.loss_w = 1.
-            # self.energy_weight = 0.
-            # self.l2_weight = 0.
+    optimizer: torch.optim.Optimizer
+    criterion: nn.CrossEntropyLoss # TODO: is there a loss superclass?
+    tr_data: Dataset
+    ts_data: Optional[Dataset]
 
     def __init__(self, config: Config):
         self.config = config
 
         # to be populated
-        self.optimizer = None
-        self.criterion = None
         self.train_loader = None
         self.test_loader = None
 
@@ -57,7 +68,7 @@ class GNNWrapper:
             self.writer = SummaryWriter('logs/tensorboard')
         self.first_flag_writer = True
 
-    def __call__(self, tr_dset, ts_dset, state_net=None, out_net=None):
+    def __call__(self, tr_dset, ts_dset=None, state_net=None, out_net=None):
         # handle the dataset info
         self._data_loader(tr_dset, ts_dset)
         self.gnn = GNN(self.config, state_net, out_net).to(self.config.device)
@@ -65,9 +76,9 @@ class GNNWrapper:
         self._optimizer()
         self._accuracy()
 
-    def _data_loader(self, tr_dset, ts_dset):  # handle dataset data and metadata
+    def _data_loader(self, tr_dset, ts_dset=None):  # handle dataset data and metadata
         self.tr_dset = tr_dset.to(self.config.device)
-        self.ts_dset = ts_dset.to(self.config.device)
+        self.ts_dset = None if ts_dset is None else ts_dset.to(self.config.device)
         self.config.label_dim = self.tr_dset.node_label_dim
         self.config.edge_label_dim = self.tr_dset.edge_label_dim
         self.config.n_nodes = self.tr_dset.num_nodes
@@ -134,16 +145,13 @@ class GNNWrapper:
                         self.writer.add_histogram(name, param, epoch)
         # self.TrainAccuracy.reset()
 
-    def predict(self, edges, agg_matrix, node_labels, *, edge_labels=None):
-        return self.gnn(edges, agg_matrix, node_labels, edge_labels=edge_labels)
-
-    def predict(self, edges, agg_matrix, node_labels, graph_node, *, edge_labels=None):
+    def predict(self, edges, agg_matrix, node_labels, *, graph_node=None, edge_labels=None):
         return self.gnn(edges, agg_matrix, node_labels, graph_agg=graph_node, edge_labels=edge_labels)
 
     def test_step(self, epoch):
         ####  TEST
         self.gnn.eval()
-        data = self.ts_dset
+        data = self.tr_dset if self.ts_dset is None else self.ts_dset
         self.TestAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
@@ -172,10 +180,10 @@ class GNNWrapper:
                                            iterations,
                                            epoch)
 
-    def valid_step(self, epoch):
+    def valid_step(self, epoch): # TODO
         ####  TEST
         self.gnn.eval()
-        data = self.ts_dset
+        data = self.tr_dset if self.ts_dset is None else self.ts_dset
         self.ValidAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
@@ -206,37 +214,10 @@ class GNNWrapper:
 
 
 class SemiSupGNNWrapper(GNNWrapper):
-    class Config:
+    class Config(GNNWrapper.Config):
         def __init__(self):
-            self.device = None
-            self.use_cuda = None
-            self.dataset_path = None
-            self.log_interval = None
-            self.tensorboard = None
-            self.task_type = None
-
-            # hyperparams
-            self.lrw = None
-            self.loss_f = None
-            self.epochs = None
-            self.convergence_threshold = None
-            self.max_iterations = None
-            self.n_nodes = None
-            self.state_dim = None
-            self.label_dim = None
-            self.output_dim = None
-            self.graph_based = False
-            self.activation = torch.nn.Tanh()
-            self.state_transition_hidden_dims = None
-            self.output_function_hidden_dims = None
-
-            # optional
-            # self.loss_w = 1.
-            # self.energy_weight = 0.
-            # self.l2_weight = 0.
-
-    def __init__(self, config: Config):
-        super().__init__(config)
+            super().__init__()
+            self.task_type = "semisupervised"
 
     def _accuracy(self):
         self.TrainAccuracy = Accuracy(type="semisupervised")
@@ -297,13 +278,10 @@ class SemiSupGNNWrapper(GNNWrapper):
         # self.TrainAccuracy.reset()
         return output  # used for plotting
 
-    def predict(self, edges, agg_matrix, node_labels, *, edge_labels=None):
-        return self.gnn(edges, agg_matrix, node_labels, edge_labels=edge_labels)
-
     def test_step(self, epoch):
         ####  TEST
         self.gnn.eval()
-        data = self.ts_dset
+        data = self.tr_dset if self.ts_dset is None else self.ts_dset
         self.TestAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
@@ -335,7 +313,7 @@ class SemiSupGNNWrapper(GNNWrapper):
     def valid_step(self, epoch):
         ####  TEST
         self.gnn.eval()
-        data = self.ts_dset
+        data = self.tr_dset if self.ts_dset is None else self.ts_dset
         self.ValidAccuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:

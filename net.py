@@ -5,11 +5,11 @@ import typing
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_sizes: typing.Iterable[int], out_dim, activation_function=nn.Sigmoid(),
+    def __init__(self, input_dim: int, hidden_sizes: typing.Iterable[int], out_dim, activation_function: nn.Module =nn.Sigmoid(),
                  activation_out=None):
         super(MLP, self).__init__()
 
-        i_h_sizes = [input_dim] + hidden_sizes  # add input dim to the iterable
+        i_h_sizes = [input_dim] + list(hidden_sizes)  # add input dim to the iterable
         self.mlp = nn.Sequential()
         for idx in range(len(i_h_sizes) - 1):
             self.mlp.add_module("layer_{}".format(idx),

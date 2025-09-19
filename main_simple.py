@@ -32,7 +32,7 @@ def plot_graph(E, N):
     g = nx.Graph()
     g.add_nodes_from(range(N.shape[0]))
     g.add_edges_from(E[:, :2])
-    nx.draw_spring(g, cmap=plt.get_cmap('Set1'), with_labels=True)
+    nx.draw_spring(g, cmap=plt.get_cmap('Set1'), with_labels=True) # type: ignore
     plt.show()
 
 
