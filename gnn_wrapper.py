@@ -54,8 +54,12 @@ class GNNWrapper:
 
     optimizer: torch.optim.Optimizer
     criterion: nn.CrossEntropyLoss # TODO: is there a loss superclass?
+    training_accuracy: Accuracy
+    test_accuracy: Accuracy
+    validation_accuracy: Accuracy
     tr_data: Dataset
     ts_data: Optional[Dataset]
+    _initialized: bool
 
     def __init__(self, config: Config):
         self.config = config
@@ -64,6 +68,8 @@ class GNNWrapper:
         self.train_loader = None
         self.test_loader = None
 
+        self._initialized = False
+
         if self.config.tensorboard:
             self.writer = SummaryWriter('logs/tensorboard')
         self.first_flag_writer = True
@@ -71,10 +77,12 @@ class GNNWrapper:
     def __call__(self, tr_dset, ts_dset=None, state_net=None, out_net=None):
         # handle the dataset info
         self._data_loader(tr_dset, ts_dset)
-        self.gnn = GNN(self.config, state_net, out_net).to(self.config.device)
-        self._criterion()
-        self._optimizer()
-        self._accuracy()
+        if not self._initialized:
+            self.gnn = GNN(self.config, state_net, out_net).to(self.config.device)
+            self._criterion()
+            self._optimizer()
+            self._accuracy()
+            self._initialized = True
 
     def _data_loader(self, tr_dset, ts_dset=None):  # handle dataset data and metadata
         self.tr_dset = tr_dset.to(self.config.device)
@@ -96,15 +104,15 @@ class GNNWrapper:
         self.criterion = nn.CrossEntropyLoss()
 
     def _accuracy(self):
-        self.TrainAccuracy = Accuracy(type=self.config.task_type)
-        self.ValidAccuracy = Accuracy(type=self.config.task_type)
-        self.TestAccuracy = Accuracy(type=self.config.task_type)
+        self.training_accuracy = Accuracy(type=self.config.task_type)
+        self.validation_accuracy = Accuracy(type=self.config.task_type)
+        self.test_accuracy = Accuracy(type=self.config.task_type)
 
     def train_step(self, epoch):
         self.gnn.train()
         data = self.tr_dset
         self.optimizer.zero_grad()
-        self.TrainAccuracy.reset()
+        self.training_accuracy.reset()
         # output computation
         if self.config.graph_based:
             output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node, edge_labels=data.edge_labels)
@@ -122,13 +130,13 @@ class GNNWrapper:
         with torch.no_grad():  # Accuracy computation
             # accuracy_train = torch.mean(
             #     (torch.argmax(output[data.idx_train], dim=-1) == data.targets[data.idx_train]).float())
-            self.TrainAccuracy.update(output, data.targets)
-            accuracy_train = self.TrainAccuracy.compute()
+            self.training_accuracy.update(output, data.targets)
+            accuracy_train = self.training_accuracy.compute()
 
             if epoch % self.config.log_interval == 0:
                 print(
                     'Train Epoch: {} \t Mean Loss: {:.6f}\tAccuracy Full Batch: {:.6f} \t  Best Accuracy : {:.6f}  \t Iterations: {}'.format(
-                        epoch, loss, accuracy_train, self.TrainAccuracy.get_best(), iterations))
+                        epoch, loss, accuracy_train, self.training_accuracy.get_best(), iterations))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Training Accuracy',
@@ -152,7 +160,7 @@ class GNNWrapper:
         ####  TEST
         self.gnn.eval()
         data = self.tr_dset if self.ts_dset is None else self.ts_dset
-        self.TestAccuracy.reset()
+        self.test_accuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
                 output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node, edge_labels=data.edge_labels)
@@ -160,14 +168,14 @@ class GNNWrapper:
                 output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
             test_loss = self.criterion(output, data.targets)
 
-            self.TestAccuracy.update(output, data.targets)
-            acc_test = self.TestAccuracy.compute()
+            self.test_accuracy.update(output, data.targets)
+            acc_test = self.test_accuracy.compute()
             # acc_test = torch.mean(
             #     (torch.argmax(output[data.idx_test], dim=-1) == data.targets[data.idx_test]).float())
 
             if epoch % self.config.log_interval == 0:
                 print('Test set: Average loss: {:.4f}, Accuracy:  ({:.2f}%) , Best Accuracy:  ({:.2f}%)'.format(
-                    test_loss, 100*acc_test, 100*self.TestAccuracy.get_best()))
+                    test_loss, 100*acc_test, 100*self.test_accuracy.get_best()))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Test Accuracy',
@@ -184,7 +192,7 @@ class GNNWrapper:
         ####  TEST
         self.gnn.eval()
         data = self.tr_dset if self.ts_dset is None else self.ts_dset
-        self.ValidAccuracy.reset()
+        self.validation_accuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
                 output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, graph_agg=data.graph_node, edge_labels=data.edge_labels)
@@ -192,14 +200,14 @@ class GNNWrapper:
                 output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
             test_loss = self.criterion(output, data.targets)
 
-            self.ValidAccuracy.update(output, data.targets)
-            acc_valid = self.ValidAccuracy.compute()
+            self.validation_accuracy.update(output, data.targets)
+            acc_valid = self.validation_accuracy.compute()
             # acc_test = torch.mean(
             #     (torch.argmax(output[data.idx_test], dim=-1) == data.targets[data.idx_test]).float())
 
             if epoch % self.config.log_interval == 0:
                 print('Valid set: Average loss: {:.4f}, Accuracy:  ({:.2f}%) , Best Accuracy:  ({:.2f}%)'.format(
-                    test_loss, 100*acc_valid, 100*self.ValidAccuracy.get_best()))
+                    test_loss, 100*acc_valid, 100*self.validation_accuracy.get_best()))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Valid Accuracy',
@@ -220,15 +228,15 @@ class SemiSupGNNWrapper(GNNWrapper):
             self.task_type = "semisupervised"
 
     def _accuracy(self):
-        self.TrainAccuracy = Accuracy(type="semisupervised")
-        self.ValidAccuracy = Accuracy(type="semisupervised")
-        self.TestAccuracy = Accuracy(type="semisupervised")
+        self.training_accuracy = Accuracy(type="semisupervised")
+        self.validation_accuracy = Accuracy(type="semisupervised")
+        self.test_accuracy = Accuracy(type="semisupervised")
 
     def train_step(self, epoch):
         self.gnn.train()
         data = self.tr_dset
         self.optimizer.zero_grad()
-        self.TrainAccuracy.reset()
+        self.training_accuracy.reset()
         # output computation
         if self.config.graph_based:
             output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node, edge_labels=data.edge_labels)
@@ -254,13 +262,13 @@ class SemiSupGNNWrapper(GNNWrapper):
         with torch.no_grad():  # Accuracy computation
             # accuracy_train = torch.mean(
             #     (torch.argmax(output[data.idx_train], dim=-1) == data.targets[data.idx_train]).float())
-            self.TrainAccuracy.update(output, data.targets, idx=data.idx_train)
-            accuracy_train = self.TrainAccuracy.compute()
+            self.training_accuracy.update(output, data.targets, idx=data.idx_train)
+            accuracy_train = self.training_accuracy.compute()
 
             if epoch % self.config.log_interval == 0:
                 print(
                     'Train Epoch: {} \t Mean Loss: {:.6f}\tAccuracy Full Batch: {:.6f} \t  Best Accuracy : {:.6f}  \t Iterations: {}'.format(
-                        epoch, loss, accuracy_train, self.TrainAccuracy.get_best(), iterations))
+                        epoch, loss, accuracy_train, self.training_accuracy.get_best(), iterations))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Training Accuracy',
@@ -282,7 +290,7 @@ class SemiSupGNNWrapper(GNNWrapper):
         ####  TEST
         self.gnn.eval()
         data = self.tr_dset if self.ts_dset is None else self.ts_dset
-        self.TestAccuracy.reset()
+        self.test_accuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
                 output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node, edge_labels=data.edge_labels)
@@ -290,14 +298,14 @@ class SemiSupGNNWrapper(GNNWrapper):
                 output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
             test_loss = self.criterion(output[data.idx_test], data.targets[data.idx_test])
 
-            self.TestAccuracy.update(output, data.targets, idx=data.idx_test)
-            acc_test = self.TestAccuracy.compute()
+            self.test_accuracy.update(output, data.targets, idx=data.idx_test)
+            acc_test = self.test_accuracy.compute()
             # acc_test = torch.mean(
             #     (torch.argmax(output[data.idx_test], dim=-1) == data.targets[data.idx_test]).float())
 
             if epoch % self.config.log_interval == 0:
                 print('Test set: Average loss: {:.4f}, Accuracy:  ({:.2f}%) , Best Accuracy:  ({:.2f}%)'.format(
-                    test_loss, 100*acc_test, 100*self.TestAccuracy.get_best()))
+                    test_loss, 100*acc_test, 100*self.test_accuracy.get_best()))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Test Accuracy',
@@ -314,7 +322,7 @@ class SemiSupGNNWrapper(GNNWrapper):
         ####  TEST
         self.gnn.eval()
         data = self.tr_dset if self.ts_dset is None else self.ts_dset
-        self.ValidAccuracy.reset()
+        self.validation_accuracy.reset()
         with torch.no_grad():
             if self.config.graph_based:
                 output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, data.graph_node, edge_labels=data.edge_labels)
@@ -322,14 +330,14 @@ class SemiSupGNNWrapper(GNNWrapper):
                 output, iterations = self.gnn(data.edges, data.agg_matrix, data.node_labels, edge_labels=data.edge_labels)
             test_loss = self.criterion(output[data.idx_valid], data.targets[data.idx_valid])
 
-            self.ValidAccuracy.update(output, data.targets, idx=data.idx_valid)
-            acc_valid = self.ValidAccuracy.compute()
+            self.validation_accuracy.update(output, data.targets, idx=data.idx_valid)
+            acc_valid = self.validation_accuracy.compute()
             # acc_test = torch.mean(
             #     (torch.argmax(output[data.idx_test], dim=-1) == data.targets[data.idx_test]).float())
 
             if epoch % self.config.log_interval == 0:
                 print('Valid set: Average loss: {:.4f}, Accuracy:  ({:.2f}%) , Best Accuracy:  ({:.2f}%)'.format(
-                    test_loss, 100*acc_valid, 100*self.ValidAccuracy.get_best()))
+                    test_loss, 100*acc_valid, 100*self.validation_accuracy.get_best()))
 
                 if self.config.tensorboard:
                     self.writer.add_scalar('Valid Accuracy',
